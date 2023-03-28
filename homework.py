@@ -21,7 +21,7 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('CHAT_ID')
 
-RETRY_PERIOD = 2 #600
+RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
@@ -102,7 +102,11 @@ def parse_status(homework) -> str:
         raise ErrorResponseData()
 
     try:
-        verdict = HOMEWORK_VERDICTS[homework.get('status')]
+        status = homework.get('status')
+        if status is None:
+            logger.debug(homework)
+        else:
+            verdict = HOMEWORK_VERDICTS[status]
     except KeyError:
         raise ErrorStatus('Не корректный статус работы')
 
@@ -111,8 +115,7 @@ def parse_status(homework) -> str:
 
 def main():
     """Основная логика работы бота."""
-    home_work_state = {}
-    error_list = ()
+    error_list = set()
 
     try:
         check_tokens()
@@ -129,15 +132,7 @@ def main():
             check_response(answer)
             for work in answer.get('homeworks'):
                 text_status = parse_status(work)
-                homework_name = work.get('homework_name')
-                status = work.get('status')
-                # проверим что статус изменился
-                if homework_name not in home_work_state:
-                    home_work_state[homework_name] = status
-                elif home_work_state[homework_name] != status:
-                    send_message(bot, text_status.split('.')[1])
-                else:
-                    logger.debug(text_status)
+                send_message(bot, text_status)
 
         # здесь уже ничего не сделать
         except ErrorSend:
@@ -149,7 +144,7 @@ def main():
             if message not in error_list:
                 error_list.add(message)
                 send_message(bot, message)
-               
+
         time.sleep(RETRY_PERIOD)
 
 

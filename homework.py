@@ -1,18 +1,16 @@
 import logging
-from http import HTTPStatus
 import os
-import requests
+import sys
 import time
+from http import HTTPStatus
 
-from dotenv import load_dotenv
+import requests
 import telegram
+from dotenv import load_dotenv
 from telegram.error import TelegramError
 
-from exceptions import (ErrorEnv,
-                        ErrorConnection,
-                        ErrorResponseData,
-                        ErrorSend,
-                        ErrorStatus)
+from exceptions import (ErrorConnection, ErrorEnv, ErrorResponseData,
+                        ErrorSend, ErrorStatus)
 
 load_dotenv()
 
@@ -33,9 +31,10 @@ HOMEWORK_VERDICTS = {
 }
 
 logger = logging.getLogger(__name__)
-handler = logging.StreamHandler()
+handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ('%(asctime)s - %(name)s - %(levelname)s '
+     '-%(funcName)s - %(lineno)d - %(message)s')
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -43,35 +42,50 @@ logger.addHandler(handler)
 
 def check_tokens():
     """Проверим определены ли все необходимые переменные."""
+    variables = []
+
     if PRACTICUM_TOKEN is None or not PRACTICUM_TOKEN:
-        raise ErrorEnv('Не определена переменная: "PRACTICUM_TOKEN"')
+        variables.append('PRACTICUM_TOKEN')
 
     if TELEGRAM_TOKEN is None or not TELEGRAM_TOKEN:
-        raise ErrorEnv('Не определена переменная: "TELEGRAM_TOKEN"')
+        variables.append('TELEGRAM_TOKEN')
 
     if TELEGRAM_CHAT_ID is None or not TELEGRAM_CHAT_ID:
-        raise ErrorEnv('Не определена переменная: "TELEGRAM_CHAT_ID"')
+        variables.append('TELEGRAM_CHAT_ID')
+
+    if variables:
+        message = 'Не определена(ы) переменная(ые): ' + ', '.join(variables)
+        raise ErrorEnv(message)
 
 
 def send_message(bot: telegram.Bot, message: str):
     """Отправка сообщения."""
     try:
+        logger.debug('Пытаемся отправить сообщение: ' + message)
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug(message)
+        logger.debug('отправлено сообщение :' + message)
     except TelegramError as error:
         logger.error(error)
-        raise ErrorSend('Не удалось отправить сообщение')
+        raise ErrorSend('Не удалось отправить сообщение: ' + message)
 
 
 def get_api_answer(timestamp: int) -> dict:
     """Получаем данные от сервера."""
     payload = {'from_date': timestamp}
+    
+    url_info = f'{ENDPOINT}, параметры: {payload}' 
+
     try:
+        logger.debug(f'Пытаемся отправить запрос на адрес: {url_info}')
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
+        logger.debug(f'Результат запроса с адреса: {url_info}'
+                     f' - {response.status_code}')
         if response.status_code != HTTPStatus.OK:
-            raise Exception('Ошибка подключения')
+            raise ValueError('Ошибка подключения')
+    except requests.RequestException:
+        raise ErrorConnection(f'Ошибка подключения к узлу: {url_info}')
     except Exception:
-        raise ErrorConnection('Ошибка подключения')
+        raise ErrorConnection(f'Ошибка подключения к узлу: {url_info}')
 
     return response.json()
 

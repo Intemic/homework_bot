@@ -7,9 +7,7 @@ class ErrorEnv(ValueError):
 class ErrorResponseData(TypeError):
     """Не допустимый формат."""
 
-    def __str__(self):
-        """Пропишем сообщение по умолчанию."""
-        return 'Не корректный формат данных'
+    pass
 
 
 class ErrorConnection(Exception):

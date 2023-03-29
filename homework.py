@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from telegram.error import TelegramError
 
 from exceptions import (ErrorConnection, ErrorEnv, ErrorResponseData,
-                        ErrorSend, ErrorStatus)
+                        ErrorStatus)
 
 load_dotenv()
 
@@ -66,14 +66,13 @@ def send_message(bot: telegram.Bot, message: str):
         logger.debug('отправлено сообщение :' + message)
     except TelegramError as error:
         logger.error(error)
-        raise ErrorSend('Не удалось отправить сообщение: ' + message)
 
 
 def get_api_answer(timestamp: int) -> dict:
     """Получаем данные от сервера."""
     payload = {'from_date': timestamp}
-    
-    url_info = f'{ENDPOINT}, параметры: {payload}' 
+
+    url_info = f'{ENDPOINT}, параметры: {payload}'
 
     try:
         logger.debug(f'Пытаемся отправить запрос на адрес: {url_info}')
@@ -82,9 +81,10 @@ def get_api_answer(timestamp: int) -> dict:
                      f' - {response.status_code}')
         if response.status_code != HTTPStatus.OK:
             raise ValueError('Ошибка подключения')
+    except ValueError:
+        raise ErrorConnection(f'Неверный статус ответа при подключении к узлу:'
+                              f'{url_info}, статус: {response.status_code}')
     except requests.RequestException:
-        raise ErrorConnection(f'Ошибка подключения к узлу: {url_info}')
-    except Exception:
         raise ErrorConnection(f'Ошибка подключения к узлу: {url_info}')
 
     return response.json()
@@ -92,75 +92,91 @@ def get_api_answer(timestamp: int) -> dict:
 
 def check_response(response: dict):
     """Проверяем соответствие ответа сервера типу данных."""
-    if not type(response) is dict:
-        raise ErrorResponseData()
+    logger.debug('Начало проверки данных')
+
+    parameters = []
+    if not isinstance(response, dict):
+        raise ErrorResponseData('Не коректный ответа сервера, '
+                                'результат не словарь')
 
     home_works = response.get('homeworks')
-    if home_works is None or not type(home_works) is list:
-        raise ErrorResponseData()
+    if home_works is None:
+        parameters.append('homeworks')
+    if not isinstance(home_works, list):
+        raise ErrorResponseData('Не коректный ответа сервера, '
+                                '"homeworks" не list')
 
     if response.get('current_date') is None:
-        raise ErrorResponseData()
+        parameters.append('current_date')
 
-    if len(home_works) > 0:
-        if home_works[0].get('status') is None:
-            raise ErrorResponseData()
-        if home_works[0].get('homework_name') is None:
-            raise ErrorResponseData()
+    if parameters:
+        message = ('Не корректный ответ сервера, '
+                   'отсутствую параметр(ы): '
+                   + ', '.join(parameters))
+        raise ErrorResponseData(message)
+
+    logger.debug('Данные от сервера проверены успешно')
 
 
 def parse_status(homework) -> str:
     """Считываем статус работы."""
+    logger.debug('Начинаем разбор состояния домашнего задания')
+
+    parameters = []
     homework_name = homework.get('homework_name')
     if homework_name is None:
-        raise ErrorResponseData()
+        parameters.append('homework_name')
+
+    status = homework.get('status')
+    if status is None:
+        parameters.append('status')
+
+    if parameters:
+        message = ('В структуре отсутствуют параметр(ы): '
+                   + ', '.join(parameters))
+        raise ErrorResponseData(message)
 
     try:
-        status = homework.get('status')
-        if status is None:
-            logger.debug(homework)
-        else:
-            verdict = HOMEWORK_VERDICTS[status]
+        verdict = HOMEWORK_VERDICTS[status]
     except KeyError:
-        raise ErrorStatus('Не корректный статус работы')
+        raise ErrorStatus(f'Не корректный статус работы: {status}')
 
+    logger.debug('Разбор состояния домашнего задания успешен')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
-    error_list = set()
+    last_error = ''
 
     try:
         check_tokens()
     except ErrorEnv as error:
         logger.critical(error)
-        return None
+        sys.exit(1)
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time())
 
     while True:
-        timestamp = int(time.time())
         try:
             answer = get_api_answer(timestamp)
             check_response(answer)
-            for work in answer.get('homeworks'):
-                text_status = parse_status(work)
+            works = answer.get('homeworks')
+            if works:
+                text_status = parse_status(works[0])
                 send_message(bot, text_status)
-
-        # здесь уже ничего не сделать
-        except ErrorSend:
-            # собщение уже залогировали, отсылать не нужно,
-            # общую логику его засовывать не нужно, по-этому
-            pass
+            else:
+                logger.debug('Отсутствуют новые статусы')
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logger.error(message)
-            if message not in error_list:
-                error_list.add(message)
+            logger.error(message, exc_info=True)
+            if message != last_error:
+                last_error = message
                 send_message(bot, message)
 
+        timestamp = int(time.time())
         time.sleep(RETRY_PERIOD)
 
 

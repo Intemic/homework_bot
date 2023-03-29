@@ -20,9 +20,3 @@ class ErrorStatus(Exception):
     """Не допустимый статус задания."""
 
     pass
-
-
-class ErrorSend(Exception):
-    """Ошибка отправки сообщения."""
-
-    pass

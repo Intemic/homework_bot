@@ -45,13 +45,13 @@ def check_tokens():
     """Проверим определены ли все необходимые переменные."""
     variables = []
 
-    if PRACTICUM_TOKEN is None or not PRACTICUM_TOKEN:
+    if not PRACTICUM_TOKEN:
         variables.append('PRACTICUM_TOKEN')
 
-    if TELEGRAM_TOKEN is None or not TELEGRAM_TOKEN:
+    if not TELEGRAM_TOKEN:
         variables.append('TELEGRAM_TOKEN')
 
-    if TELEGRAM_CHAT_ID is None or not TELEGRAM_CHAT_ID:
+    if not TELEGRAM_CHAT_ID:
         variables.append('TELEGRAM_CHAT_ID')
 
     if variables:
@@ -81,10 +81,10 @@ def get_api_answer(timestamp: int) -> dict:
         logger.debug(f'Результат запроса с адреса: {url_info}'
                      f' - {response.status_code}')
         if response.status_code != HTTPStatus.OK:
-            raise ValueError('Ошибка подключения')
-    except ValueError:
-        raise ErrorConnection(f'Неверный статус ответа при подключении к узлу:'
-                              f'{url_info}, статус: {response.status_code}')
+            raise ErrorConnection(
+                f'Неверный статус ответа при подключении к '
+                f'узлу: {url_info}, статус: {response.status_code}'
+            )
     except requests.RequestException:
         raise ErrorConnection(f'Ошибка подключения к узлу: {url_info}')
 

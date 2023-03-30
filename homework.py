@@ -103,7 +103,7 @@ def check_response(response: dict):
     home_works = response.get('homeworks')
     if home_works is None:
         parameters.append('homeworks')
-    if not isinstance(home_works, list):
+    elif not isinstance(home_works, list):
         raise ErrorResponseData('Не коректный ответа сервера, '
                                 '"homeworks" не list')
 

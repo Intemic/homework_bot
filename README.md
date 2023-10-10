@@ -1,2 +1,3 @@
-# homework_bot
-python telegram bot
+# Telegram бот проверки статуса проверки домашнего задания
+
+для реализации используется библиотека python-telegram-bot
